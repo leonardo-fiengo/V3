@@ -1,0 +1,27 @@
+PRAGMA foreign_keys=ON;
+CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE currencies(code TEXT PRIMARY KEY, minor_digits INTEGER NOT NULL CHECK(minor_digits=2));
+CREATE TABLE vault_config(id INTEGER PRIMARY KEY CHECK(id=1), config TEXT NOT NULL);
+CREATE TABLE ledger_accounts(id TEXT PRIMARY KEY, name TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('bank','cash','savings','credit_card','income','expense','equity')), opening_date TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)), color TEXT NOT NULL DEFAULT '#7c6cf0', UNIQUE(name,kind));
+CREATE TABLE journal_entries(id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('income','expense','transfer','split','refund','opening','reversal')), date TEXT NOT NULL, account_id TEXT NOT NULL REFERENCES ledger_accounts(id), destination_id TEXT REFERENCES ledger_accounts(id), amount INTEGER NOT NULL CHECK(typeof(amount)='integer' AND amount>=0), request_json TEXT NOT NULL, idempotency_key TEXT NOT NULL UNIQUE, replaces_id TEXT REFERENCES journal_entries(id), reverses_id TEXT UNIQUE REFERENCES journal_entries(id), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, source TEXT NOT NULL DEFAULT 'manual', posted INTEGER NOT NULL DEFAULT 0 CHECK(posted IN (0,1)));
+CREATE TABLE postings(id INTEGER PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES journal_entries(id), account_id TEXT NOT NULL REFERENCES ledger_accounts(id), amount INTEGER NOT NULL CHECK(typeof(amount)='integer'));
+CREATE INDEX postings_account ON postings(account_id,entry_id);
+CREATE INDEX entries_date ON journal_entries(date,created_at);
+CREATE TABLE entry_annotations(entry_id TEXT PRIMARY KEY REFERENCES journal_entries(id), description TEXT NOT NULL DEFAULT '', payee TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', cleared INTEGER NOT NULL DEFAULT 0 CHECK(cleared IN (0,1)));
+CREATE TABLE budget_allocations(month TEXT NOT NULL, category_id TEXT NOT NULL REFERENCES ledger_accounts(id), amount INTEGER NOT NULL CHECK(typeof(amount)='integer' AND amount>0), PRIMARY KEY(month,category_id));
+CREATE TABLE import_batches(id TEXT PRIMARY KEY, source TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, imported_count INTEGER NOT NULL);
+CREATE TABLE import_rows(batch_id TEXT NOT NULL REFERENCES import_batches(id), row_number INTEGER NOT NULL, entry_id TEXT NOT NULL REFERENCES journal_entries(id), fingerprint TEXT NOT NULL, PRIMARY KEY(batch_id,row_number));
+CREATE INDEX import_fingerprint ON import_rows(fingerprint);
+CREATE TABLE source_mappings(source TEXT PRIMARY KEY, mapping TEXT NOT NULL);
+CREATE TABLE request_keys(key TEXT PRIMARY KEY, operation TEXT NOT NULL, payload TEXT NOT NULL, result TEXT NOT NULL);
+CREATE TRIGGER validate_post BEFORE UPDATE OF posted ON journal_entries WHEN NEW.posted=1 AND OLD.posted=0 BEGIN
+ SELECT CASE WHEN (SELECT COUNT(*) FROM postings WHERE entry_id=NEW.id)<2 THEN RAISE(ABORT,'At least two postings required') END;
+ SELECT CASE WHEN (SELECT COALESCE(SUM(amount),0) FROM postings WHERE entry_id=NEW.id)<>0 THEN RAISE(ABORT,'Unbalanced entry') END;
+END;
+CREATE TRIGGER immutable_entry BEFORE UPDATE ON journal_entries WHEN OLD.posted=1 BEGIN SELECT RAISE(ABORT,'Posted entries are immutable'); END;
+CREATE TRIGGER immutable_entry_delete BEFORE DELETE ON journal_entries WHEN OLD.posted=1 BEGIN SELECT RAISE(ABORT,'Posted entries are immutable'); END;
+CREATE TRIGGER immutable_post_update BEFORE UPDATE ON postings WHEN (SELECT posted FROM journal_entries WHERE id=OLD.entry_id)=1 BEGIN SELECT RAISE(ABORT,'Posted entries are immutable'); END;
+CREATE TRIGGER immutable_post_delete BEFORE DELETE ON postings WHEN (SELECT posted FROM journal_entries WHERE id=OLD.entry_id)=1 BEGIN SELECT RAISE(ABORT,'Posted entries are immutable'); END;
+CREATE TRIGGER immutable_post_insert BEFORE INSERT ON postings WHEN (SELECT posted FROM journal_entries WHERE id=NEW.entry_id)=1 BEGIN SELECT RAISE(ABORT,'Posted entries are immutable'); END;
+INSERT INTO schema_migrations(version) VALUES(1);
+PRAGMA user_version=1;

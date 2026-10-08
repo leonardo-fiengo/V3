@@ -1,0 +1,12 @@
+{
+  "date": "2026-10-08T16:03:02.014Z",
+  "platform": "win32",
+  "results": [
+    "Native UI setup and expense through Rust IPC update account balance",
+    "Native window close preserves unsaved drafts until explicit discard",
+    "Process restart and password unlock preserve encrypted committed data",
+    "Encrypted backup restores through Rust IPC to a separate app data directory",
+    "Small amounts retain precision and net refunds plot below zero"
+  ],
+  "limitation": "Separate data directories on the same Windows profile; clean profile and offline installation remain release gates."
+}

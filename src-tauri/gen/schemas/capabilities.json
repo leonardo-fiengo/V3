@@ -1,0 +1,1 @@
+{"main":{"identifier":"main","description":"Local vault commands and user-selected file dialogs","local":true,"windows":["main"],"permissions":["core:default","dialog:allow-open","dialog:allow-save","core:window:allow-close","core:window:allow-destroy"]}}

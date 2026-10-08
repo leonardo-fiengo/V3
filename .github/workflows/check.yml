@@ -1,0 +1,19 @@
+name: Verify desktop MVP
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --no-default-features
+      - run: cargo run --no-default-features --example export_types
+        working-directory: src-tauri
+      - run: npm run check
+      - run: npx playwright install chromium
+      - run: npx playwright test
+      - run: cargo check --manifest-path src-tauri/Cargo.toml
