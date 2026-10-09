@@ -15,11 +15,13 @@ For the real desktop app, install the [Tauri Windows prerequisites](https://v2.t
 
 ## Scope
 
-Six main pages: Dashboard, Transactions (with detail/history), Accounts (with detail/running balances), Budgets, Reports, Settings. Setup, unlock and recovery are separate states.
+Ten consistent pages: Dashboard, Transactions, Accounts, Budgets, Recurring, Orders, Money owed, Taxes, Reports, and Settings. Setup, unlock and recovery are separate states. The dashboard uses a unified net-worth hero and cumulative daily cash-flow chart; navigation is a separate shell.
 
 Included: one vault and one fixed two-decimal currency (EUR/USD/GBP/CHF/CAD/AUD); bank/cash/savings/card accounts; opening ledger balances; income/expenses/transfers/splits/refunds; immutable corrections/voids; categories; filtering/sorting/pagination; monthly budgets without rollover; three reports and accessible tables; CSV preview/import/export; conservative V2 migration; encrypted backup/restore; password changes/inactivity lock; themes and reduced motion.
 
-Deferred: bank connections, sync, investments, multicurrency, recurring/scheduled entries, OCR, automatic categorization, full statement reconciliation, PDF and 3D graphics. Cleared status is not reconciliation.
+Deferred: bank connections, sync, investments, multicurrency, OCR, automatic categorization, full statement reconciliation, PDF and 3D graphics. Cleared status is not reconciliation.
+
+Added: salary and spending plans, recurring-aware forecasts and reviewed exclusions, recurring payment history, linked orders/product and delivery refunds, ledger-backed partial debt settlement, and tax organization/CSV export. Email previews are available but sending is unconfigured; no provider key is bundled. Shared tokens, local Inter, keyboard controls and privacy-aware money components are described in [implementation notes](docs/DESIGN_IMPLEMENTATION.md).
 
 ## Rust boundary and persistence
 
@@ -41,7 +43,7 @@ CSV imports support UTF-8 files up to 10 MB/10,000 rows. Map date/description/am
 
 The V2 adapter is based on the inspected sibling Python source: schema.py, money_migration.py, roadmap_migration.py, services/accounts.py and services/analytics.py. It reads source copies with read-only SQLite, uses integer *_minor fields, ignores transfer mirrors, supports split allocations, dated balance adjustments (using reconciliation dates where present) and simple monthly budgets, and compares supported account balances and monthly income/expense totals before activation. Migration keeps a pre-migration encrypted safety copy.
 
-Legacy/unknown schemas, non-EUR rows, investments, pending transactions, linked refunds/reimbursements block activation pending dedicated adapters. Loans, recurring rules, attachments and planning are outside the MVP; keep your V2 archive. Fixture tests do not certify every real V2 dataset. The actual sibling V2 database was also previewed read-only: four account balances, five monthly periods and 56 transactions compared successfully with no blockers. The source was not changed and migration was not activated. No user database is migrated automatically.
+Legacy/unknown schemas, non-EUR rows, investments, pending transactions, linked refunds/reimbursements block activation pending dedicated adapters. V2 loans, recurring rules, attachments, orders and planning still require dedicated source adapters; keep your V2 archive. Fixture tests do not certify every real V2 dataset. The actual sibling V2 database was also previewed read-only: four account balances, five monthly periods and 56 transactions compared successfully with no blockers. The source was not changed and migration was not activated. No user database is migrated automatically.
 
 ## Verification and release
 
@@ -55,8 +57,8 @@ cargo check --manifest-path src-tauri/Cargo.toml
 
 For the local toolchain use `scripts/rust.ps1 -Task test`, `-Task check`, `-Task native`, or `-Task types`. The types helper runs from src-tauri. Commit generated types and lockfiles together.
 
-The Rust suite covers persistence, transfers/card settlement, splits/refunds/budgets, corrections, idempotency, archives, historical balances, failed writes, encrypted portable restore, key rewrapping, tampering and CSV atomicity. Browser tests cover six-page navigation, form failures, preserved filters, corrections, budget editing, report tables and scaling.
+The Rust suite covers persistence, transfers/card settlement, splits/refunds/budgets, corrections, idempotency, archives, historical balances, failed writes, encrypted portable restore, key rewrapping, tampering and CSV atomicity. Browser tests cover all ten pages, form failures, preserved filters, corrections, comprehensive privacy/locking, daily date ranges, partial debts, reminder retries, budget editing, report tables, shortcuts and scaling.
 
 **This is a local development build.** Signing is intentionally unset at the user's request: neither signCommand nor certificateThumbprint is configured. `scripts/release.ps1` builds an unsigned installer by default; optional `-Sign` requires an installed publisher certificate/private key and MM_SIGN_CERT_THUMBPRINT and validates Authenticode on both executable and installer. The installer is configured for offline WebView2. No signed update endpoint is configured; the app says so explicitly. Clean offline installation, fresh Windows-profile restore, real disk-full/ACL tests, screen-reader/OS scaling checks, and safe upgrade/rollback tests remain acceptance gates. See [verification results](docs/VERIFICATION.md) and [acceptance](docs/ACCEPTANCE.md).
 
-For a standalone development executable with embedded frontend assets, run `scripts/rust.ps1 -Task portable`; for the unsigned local NSIS installer run `scripts/rust.ps1 -Task installer`. These use the debug profile. The native smoke harness is `npm run test:native`; it uses isolated test directories and never opens the real vault. The embedded application passed setup, expense entry, draft protection, restart/unlock, encrypted portable restore and signed-value chart checks with no development server running.
+For a standalone development executable with embedded frontend assets, run `scripts/rust.ps1 -Task portable`; for the unsigned local NSIS installer run `scripts/rust.ps1 -Task installer`. These use the debug profile. The native smoke harness is `npm run test:native`; it uses isolated test directories and never opens the real vault. The final embedded application passed six native smoke stages with no development server: setup/expense, draft protection, restart/unlock, encrypted portable restore, signed-value charts, and persistence of planning, recurring payments, order refund allocations, partial debts and tax export. Privacy masking was verified in the native WebView.

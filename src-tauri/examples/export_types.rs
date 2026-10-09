@@ -1,9 +1,26 @@
+use money_manager::workspace::*;
 use money_manager::{error::AppError, models::*, Command};
 use ts_rs::TS;
 fn main() {
     let path = std::path::Path::new("../src/lib/generated");
     macro_rules! export {($($t:ty),*)=>{$(<$t>::export_all_to(path).unwrap();)*};}
     export!(
+        MoneyDto,
+        CashFlowPoint,
+        Plan,
+        Recurring,
+        Debt,
+        Order,
+        TaxItem,
+        Preferences,
+        WorkspaceItem,
+        Occurrence,
+        DebtView,
+        OrderView,
+        Workspace,
+        PlanSummary,
+        Overview,
+        Reminder,
         Config,
         Account,
         Category,

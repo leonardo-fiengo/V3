@@ -1,3 +1,5 @@
+import { minor, decimal, chartNumber } from "../lib/money";
+import { CumulativeChart } from "../features/dashboard/CashFlowCard";
 import { useState } from "react";
 import { Download, TrendingUp } from "lucide-react";
 import {
@@ -12,10 +14,15 @@ import {
 } from "../lib/api";
 import { useApp, useQuery } from "../context";
 import { Amount, InlineError, PageTitle, State } from "../components/ui";
-import { CashflowChart, SpendingChart } from "./Dashboard";
+import { SpendingChart } from "./Dashboard";
 import type { AppError, Reports } from "../lib/types";
 function NetWorthChart({ data }: { data: Reports }) {
-  const values = data.months.map((m) => Number(m.net_worth));
+  const { hidden } = useApp();
+  if (hidden)
+    return <div className="chart-private">Net-worth history hidden.</div>;
+  const values = data.months.map((m) =>
+    chartNumber(minor(m.net_worth).toString()),
+  );
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const range = max - min || 1;
@@ -34,8 +41,8 @@ function NetWorthChart({ data }: { data: Reports }) {
       >
         <defs>
           <linearGradient id="networth-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8d80d8" stopOpacity=".23" />
-            <stop offset="100%" stopColor="#8d80d8" stopOpacity="0" />
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity=".23" />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity="0" />
           </linearGradient>
         </defs>
         {[30, 108, 185].map((y) => (
@@ -58,7 +65,7 @@ function NetWorthChart({ data }: { data: Reports }) {
             <polyline
               points={points}
               fill="none"
-              stroke="#8d80d8"
+              stroke="var(--accent)"
               strokeWidth="3"
               strokeLinejoin="round"
             />
@@ -68,7 +75,7 @@ function NetWorthChart({ data }: { data: Reports }) {
                 cx={40 + (i / Math.max(values.length - 1, 1)) * 820}
                 cy={185 - ((n - min) / range) * 155}
                 r="4"
-                fill="#8d80d8"
+                fill="var(--accent)"
               />
             ))}
           </>
@@ -108,14 +115,20 @@ export default function ReportsPage() {
     [start, end, account, tab],
   );
   const data = q.data;
-  const income = data?.months.reduce((s, m) => s + Number(m.income), 0) ?? 0;
-  const expense = data?.months.reduce((s, m) => s + Number(m.expenses), 0) ?? 0;
-  const total = data?.spending.reduce((s, r) => s + Number(r.amount), 0) ?? 0;
+  const flow = useQuery(
+    () => api({ op: "get_cash_flow", start, end, account_id: account || null }),
+    [start, end, account],
+  );
+  const { hidden } = useApp();
+  const income = data?.months.reduce((s, m) => s + minor(m.income), 0n) ?? 0n;
+  const expense =
+    data?.months.reduce((s, m) => s + minor(m.expenses), 0n) ?? 0n;
+  const total = data?.spending.reduce((s, r) => s + minor(r.amount), 0n) ?? 0n;
   return (
     <>
       <PageTitle
         eyebrow="A STEP BACK. A CLEARER VIEW."
-        title="See the bigger picture."
+        title="Reports"
         description="Understand your patterns and the progress you’re making."
       >
         <button
@@ -221,22 +234,25 @@ export default function ReportsPage() {
                 <div className="budget-summary-grid">
                   <div className="panel summary-stat">
                     <p>Income in this period</p>
-                    <Amount className="positive" value={income.toFixed(2)} />
+                    <Amount className="positive" value={decimal(income)} />
                   </div>
                   <div className="panel summary-stat">
                     <p>Expenses in this period</p>
-                    <Amount value={expense.toFixed(2)} />
+                    <Amount value={decimal(expense)} />
                   </div>
                   <div className="panel summary-stat">
                     <p>Surplus in this period</p>
-                    <Amount value={(income - expense).toFixed(2)} />
+                    <Amount value={decimal(income - expense)} />
                   </div>
                 </div>
                 <section className="panel report-chart">
                   <div className="section-heading">
                     <div>
                       <h2>Money in. Money out.</h2>
-                      <p>Posted income and expenses, grouped by month.</p>
+                      <p>
+                        Cumulative posted income and net spending. Refunds are
+                        included; pending amounts and transfers are excluded.
+                      </p>
                     </div>
                     <div className="chart-key">
                       <span>
@@ -249,7 +265,9 @@ export default function ReportsPage() {
                       </span>
                     </div>
                   </div>
-                  <CashflowChart report={data} />
+                  <State loading={flow.loading} error={flow.error}>
+                    {flow.data ? <CumulativeChart points={flow.data} /> : null}
+                  </State>
                 </section>
               </>
             ) : tab === "spending" ? (
@@ -259,7 +277,7 @@ export default function ReportsPage() {
                     <h2>Where your money went</h2>
                     <p>Category allocations after refunds and corrections.</p>
                   </div>
-                  <Amount value={total.toFixed(2)} />
+                  <Amount value={decimal(total)} />
                 </div>
                 <State
                   empty={!data.spending.length}
@@ -332,7 +350,7 @@ export default function ReportsPage() {
                             <td>
                               <span
                                 className="color-dot"
-                                style={{ background: s.color }}
+                                style={{ background: "var(--accent)" }}
                               />
                               {s.name}
                             </td>
@@ -340,8 +358,8 @@ export default function ReportsPage() {
                               <Amount value={s.amount} />
                             </td>
                             <td className="right">
-                              {total
-                                ? `${((Number(s.amount) / total) * 100).toFixed(1)}%`
+                              {!hidden && total !== 0n
+                                ? `${Number((minor(s.amount) * 1000n) / total) / 10}%`
                                 : "—"}
                             </td>
                           </tr>

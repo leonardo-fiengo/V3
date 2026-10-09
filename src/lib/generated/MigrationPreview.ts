@@ -2,12 +2,4 @@
 import type { MigrationBalance } from "./MigrationBalance";
 import type { MigrationPeriod } from "./MigrationPeriod";
 
-export type MigrationPreview = {
-  token: string;
-  source: string;
-  accounts: Array<MigrationBalance>;
-  periods: Array<MigrationPeriod>;
-  blockers: Array<string>;
-  warnings: Array<string>;
-  transaction_count: number;
-};
+export type MigrationPreview = { token: string, source: string, accounts: Array<MigrationBalance>, periods: Array<MigrationPeriod>, blockers: Array<string>, warnings: Array<string>, transaction_count: number, };

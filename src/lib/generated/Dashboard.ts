@@ -4,14 +4,4 @@ import type { Budget } from "./Budget";
 import type { Spending } from "./Spending";
 import type { Transaction } from "./Transaction";
 
-export type Dashboard = {
-  month: string;
-  net_worth: string;
-  income: string;
-  expenses: string;
-  surplus: string;
-  accounts: Array<Account>;
-  spending: Array<Spending>;
-  budgets: Array<Budget>;
-  recent: Array<Transaction>;
-};
+export type Dashboard = { month: string, net_worth: string, income: string, expenses: string, surplus: string, accounts: Array<Account>, spending: Array<Spending>, budgets: Array<Budget>, recent: Array<Transaction>, };

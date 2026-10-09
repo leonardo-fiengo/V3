@@ -1,3 +1,4 @@
+import { minor, decimal } from "../lib/money";
 import { useRef, useState } from "react";
 import { ArrowRight, Check, Plus, Trash2 } from "lucide-react";
 import { api, errorOf, today } from "../lib/api";
@@ -288,9 +289,16 @@ export function TransactionForm() {
             <p className="field-hint">
               Allocated{" "}
               <Amount
-                value={r.splits
-                  .reduce((n, s) => n + (Number(s.amount) || 0), 0)
-                  .toFixed(2)}
+                value={decimal(
+                  r.splits.reduce(
+                    (n, s) =>
+                      n +
+                      (/^-?\d+(\.\d{1,2})?$/.test(s.amount)
+                        ? minor(s.amount)
+                        : 0n),
+                    0n,
+                  ),
+                )}
               />{" "}
               of <Amount value={r.amount || "0"} />. The total must match
               exactly.

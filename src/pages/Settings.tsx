@@ -1,3 +1,5 @@
+import { PlanningSettings } from "../features/settings/PlanningSettings";
+import { Amount } from "../components/ui";
 import { useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
 import {
@@ -36,7 +38,10 @@ import type {
 } from "../lib/types";
 import { V2Flow } from "./V2Migration";
 const tabs = [
-  ["general", "General"],
+  ["general", "Workspace & locale"],
+  ["planning", "Salary & plan"],
+  ["email", "Email reminders"],
+  ["shortcuts", "Shortcuts"],
   ["categories", "Categories"],
   ["data", "Import & export"],
   ["backups", "Backup & restore"],
@@ -49,7 +54,7 @@ export default function SettingsPage() {
     <>
       <PageTitle
         eyebrow="MAKE YOURSELF AT HOME"
-        title="Your space. Your settings."
+        title="Settings"
         description="A few thoughtful choices to make money management feel like you."
       />
       <nav className="settings-tabs" aria-label="Settings sections">
@@ -63,7 +68,30 @@ export default function SettingsPage() {
           </NavLink>
         ))}
       </nav>
-      {section === "categories" ? (
+      {section === "planning" ? (
+        <PlanningSettings />
+      ) : section === "email" ? (
+        <section className="panel settings-panel">
+          <h2>Email reminders</h2>
+          <p>
+            No protected sending service is configured. Reminder previews remain
+            available offline. Failed attempts stay retryable and never count as
+            settlements.
+          </p>
+          <p>
+            A shared provider API key must stay on the sending service. This app
+            contains no email-provider credentials.
+          </p>
+        </section>
+      ) : section === "shortcuts" ? (
+        <section className="panel settings-panel">
+          <h2>Keyboard shortcuts</h2>
+          <p>
+            Ctrl K: search; T: quick add; T then I / E / T: income / expense /
+            transfer; S: recurring; O: order; ?: help; Escape: close.
+          </p>
+        </section>
+      ) : section === "categories" ? (
         <CategoriesSettings />
       ) : section === "data" ? (
         <DataSettings />
@@ -195,7 +223,11 @@ function CategoriesSettings() {
   const [kind, setKind] = useState("expense");
   const [edit, setEdit] = useState<Category | "new" | null>(null);
   const [name, setName] = useState("");
-  const [color, setColor] = useState("#7c6cf0");
+  const [color, setColor] = useState(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim(),
+  );
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const [archive, setArchive] = useState<Category | null>(null);
@@ -212,7 +244,11 @@ function CategoriesSettings() {
             onClick={() => {
               setEdit("new");
               setName("");
-              setColor("#7c6cf0");
+              setColor(
+                getComputedStyle(document.documentElement)
+                  .getPropertyValue("--accent")
+                  .trim(),
+              );
               setError(null);
             }}
           >
@@ -244,7 +280,7 @@ function CategoriesSettings() {
               >
                 <span
                   className="category-swatch"
-                  style={{ background: c.color }}
+                  style={{ background: "var(--accent)" }}
                 />
                 <strong>{c.name}</strong>
                 {c.archived ? (
@@ -310,15 +346,7 @@ function CategoriesSettings() {
                 onChange={(e) => setName(e.target.value)}
               />
             </Field>
-            {edit === "new" ? (
-              <Field label="Category color">
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                />
-              </Field>
-            ) : null}
+
             <InlineError error={error} />
             <div className="modal-actions">
               <button className="button primary" disabled={busy}>
@@ -705,9 +733,14 @@ function ImportFlow({ onClose }: { onClose: () => void }) {
                     <td>{r.transaction?.date ?? "—"}</td>
                     <td>{r.transaction?.description ?? "Rejected row"}</td>
                     <td>
-                      {r.transaction
-                        ? `${r.transaction.kind} · ${r.transaction.amount}`
-                        : "—"}
+                      {r.transaction ? (
+                        <>
+                          {r.transaction.kind} ·{" "}
+                          <Amount value={r.transaction.amount} />
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td
                       className={

@@ -9,17 +9,74 @@ pub mod portability;
 pub mod reports;
 pub mod storage;
 pub mod vault;
+pub mod workspace;
 use error::{AppError, Result};
 use models::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use ts_rs::TS;
 use vault::Vault;
+use workspace::*;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Command {
     GetSession,
+    GetOverview {
+        start: String,
+        end: String,
+    },
+    GetWorkspace,
+    ExportTaxOrganizer {
+        path: String,
+    },
+    UnlinkOrder {
+        id: String,
+    },
+    GetCashFlow {
+        start: String,
+        end: String,
+        account_id: Option<String>,
+    },
+    GetOccurrences {
+        start: String,
+        end: String,
+    },
+    SaveWorkspaceItem {
+        item: WorkspaceItem,
+        idempotency_key: String,
+    },
+    RecordOccurrence {
+        id: String,
+        occurrence: String,
+        existing: Option<String>,
+        date: String,
+        idempotency_key: String,
+    },
+    SettleDebt {
+        id: String,
+        account_id: String,
+        amount: String,
+        date: String,
+        idempotency_key: String,
+    },
+    RefundPurchase {
+        id: String,
+        product: String,
+        delivery: String,
+        date: String,
+        idempotency_key: String,
+    },
+    ExcludeForecast {
+        id: String,
+        excluded: bool,
+    },
+    AttemptReminder {
+        id: String,
+        message: String,
+        idempotency_key: String,
+    },
+
     CreateVault {
         request: Setup,
     },
@@ -158,6 +215,89 @@ pub fn dispatch(v: &mut Vault, command: Command) -> Result<Value> {
     use Command::*;
     match command {
         GetSession => value(v.touch_session()),
+        GetOverview { start, end } => value(v.read(|c| workspace::overview(c, &start, &end))),
+        GetOccurrences { start, end } => {
+            value(v.read(|c| workspace::occurrences_range(c, &start, &end)))
+        }
+        GetCashFlow {
+            start,
+            end,
+            account_id,
+        } => {
+            value(v.read(|c| workspace::cash_flow_account(c, &start, &end, account_id.as_deref())))
+        }
+        UnlinkOrder { id } => value(v.write(|c| {
+            let order = workspace::workspace(c)?
+                .orders
+                .into_iter()
+                .find(|o| o.order.id == id)
+                .ok_or_else(|| AppError::new("NOT_FOUND", "Order no longer exists."))?;
+            if !order.refunds.is_empty() {
+                return Err(AppError::new(
+                    "LINKED_REFUNDS",
+                    "Keep this order to preserve its historical refund allocations.",
+                ));
+            }
+            c.execute(
+                "DELETE FROM workspace_items WHERE id=?1 AND kind='order'",
+                [id],
+            )?;
+            Ok(())
+        })),
+        ExportTaxOrganizer { path } => {
+            let bytes = v.read(workspace::export_taxes)?;
+            value(v.export(std::path::Path::new(&path), &bytes))
+        }
+        GetWorkspace => value(v.read(workspace::workspace)),
+        SaveWorkspaceItem {
+            item,
+            idempotency_key,
+        } => value(v.write(|c| workspace::save(c, &item, &idempotency_key))),
+        RecordOccurrence {
+            id,
+            occurrence,
+            existing,
+            date,
+            idempotency_key,
+        } => value(v.write(|c| {
+            workspace::record_occurrence(
+                c,
+                &id,
+                &occurrence,
+                existing.as_deref(),
+                &date,
+                &idempotency_key,
+            )
+        })),
+        SettleDebt {
+            id,
+            account_id,
+            amount,
+            date,
+            idempotency_key,
+        } => {
+            value(v.write(|c| {
+                workspace::settle(c, &id, &account_id, &amount, &date, &idempotency_key)
+            }))
+        }
+        RefundPurchase {
+            id,
+            product,
+            delivery,
+            date,
+            idempotency_key,
+        } => value(
+            v.write(|c| workspace::refund(c, &id, &product, &delivery, &date, &idempotency_key)),
+        ),
+        ExcludeForecast { id, excluded } => {
+            value(v.write(|c| workspace::exclude(c, &id, excluded)))
+        }
+        AttemptReminder {
+            id,
+            message,
+            idempotency_key,
+        } => value(v.write(|c| workspace::reminder_attempt(c, &id, &message, &idempotency_key))),
+
         CreateVault { request } => value(v.setup(request)),
         UnlockVault { password } => value(v.unlock(password)),
         LockVault => {

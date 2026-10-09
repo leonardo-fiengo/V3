@@ -2,4 +2,4 @@
 import type { MonthTotal } from "./MonthTotal";
 import type { Spending } from "./Spending";
 
-export type Reports = { months: Array<MonthTotal>; spending: Array<Spending> };
+export type Reports = { months: Array<MonthTotal>, spending: Array<Spending>, };

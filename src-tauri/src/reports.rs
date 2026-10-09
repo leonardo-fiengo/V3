@@ -46,7 +46,7 @@ pub fn totals(c: &Connection, start: &str, end: &str, account: Option<&str>) -> 
     Ok((income, expense))
 }
 pub fn net_worth(c: &Connection, through: &str) -> Result<i64> {
-    Ok(c.query_row("SELECT COALESCE(SUM(p.amount),0) FROM postings p JOIN ledger_accounts a ON a.id=p.account_id JOIN journal_entries e ON e.id=p.entry_id WHERE a.kind IN ('bank','cash','savings','credit_card') AND e.posted=1 AND e.date<=?1",[through],|r|r.get(0))?)
+    Ok(c.query_row("SELECT COALESCE(SUM(p.amount),0) FROM postings p JOIN ledger_accounts a ON a.id=p.account_id JOIN journal_entries e ON e.id=p.entry_id WHERE (a.kind IN ('bank','cash','savings','credit_card') OR a.id LIKE 'debt:%') AND e.posted=1 AND e.date<=?1",[through],|r|r.get(0))?)
 }
 pub fn budgets(c: &Connection, m: &str) -> Result<Vec<Budget>> {
     let (start, next) = month(m)?;
@@ -73,7 +73,11 @@ pub fn budgets(c: &Connection, m: &str) -> Result<Vec<Budget>> {
         if cat.archived && budgeted.is_none() && spent == "0.00" {
             continue;
         }
+        let (forecast, forecast_explanation) =
+            crate::workspace::category_forecast(c, m, &cat.id, &spent)?;
         out.push(Budget {
+            forecast,
+            forecast_explanation,
             category_id: cat.id,
             name: cat.name,
             color: cat.color,

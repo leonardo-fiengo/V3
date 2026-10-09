@@ -1,20 +1,22 @@
 # Verification record
 
-Verified on Windows in this workspace on 2026-10-08.
+Verified on Windows in this workspace on 2026-10-09.
 
-- Production React/TypeScript build: passed.
-- Frontend calendar assertions: 1 passed.
-- Production browser workflows: 4 passed. Navigation across six pages; preserved values after validation failures; expense creation; transaction correction/history and retained filters; budget editing; accessible report tables; keyboard entry and reduced-motion layout at 1024px.
-- Rust core: 17 tests passed (1 money unit test, 4 migration fixtures, 12 financial/portability workflows). Includes encrypted restart/unlock, transfers/card payments, splits/refunds, budgets and query agreement, immutable corrections, idempotency conflicts, archived accounts, historical balances, failed-save rollback, stale-session detection, backup restoration to a separate directory, password rewrapping, tampering, rejected/duplicate CSV rows and atomic imports.
-- Actual V2 source: read-only comparison passed for 4 accounts, 5 monthly periods and 56 transactions. No blockers; all balances and period totals match. The source was unchanged and no migration was activated.
-- Production dependency audit: 0 known vulnerabilities at verification time.
+- React/TypeScript production build: passed.
+- Frontend tests: 3 passed, covering calendar boundaries and exact currency formatting/safe chart conversion.
+- Browser workflows: 7 passed. All ten routes, transaction validation and correction history, retained filters, comprehensive privacy masking and lock state, cumulative date endpoints and keyboard inspection, partial debt repayment and retryable failed reminders, shortcuts/reduced motion at 1024px, budgets and accessible reports.
+- Rust core: 27 passed (1 money test, 4 migration fixtures, 12 encrypted financial/portability workflows, 10 workspace regressions). New checks cover daily cumulative ranges, transfers excluded from cash flow, zero income, split refund cent allocation and remaining limits, partial debt settlements, linked-record corrections, recurring occurrence uniqueness/history/prices, variable forecasts and insufficient history, cleared filtering, tax CSV export/formula escaping, item-type guards, and schema migration preservation.
+- V2 source comparison from 2026-10-08 remains valid for the unchanged financial adapter: 4 accounts, 5 periods, 56 transactions matched in a read-only preview. Source data was not changed or activated.
+- Dependency installation audit: 0 known vulnerabilities reported.
 
-Native embedded-app smoke: all 5 stages passed with the development server stopped. The real UI created a vault/account and expense through Rust IPC; native close requests preserved an unsaved draft; process restart/unlock recovered the committed balance; encrypted backup/restore recovered the same balance in a separate app-data directory; small-value axes retained precision and net refunds plotted below zero. See [native evidence](native-verification.json).
+Native embedded application: all 6 smoke stages passed with no development server. Real UI setup and expense entry, native draft-close protection, process restart/unlock, encrypted restore into a separate data directory, exact signed refund chart values, and persistence of planning/recurring/order/debt/tax workflows were verified. Partial debt settlement preserved net worth, a repeated recurring save returned the same entry, received refunds retained product/delivery allocations, the tax organizer exported successfully, and privacy removed financial charts.
 
-An unsigned local NSIS development installer was built at `src-tauri/target/debug/bundle/nsis/Money Manager_3.0.0_x64-setup.exe` (250.33 MiB). Authenticode reports NotSigned, as requested. Frontend assets and offline WebView2 are bundled.
+Final installer: 265,044,553 bytes (252.77 MiB), Authenticode NotSigned as requested. SHA-256: d8874dcd9ec60afc479830bd803119557e0be2b63df9b96572c48621e47e6a82.
 
-The browser uses explicit volatile sample data. Browser checks are separate from native Rust persistence checks.
+The browser is an explicitly labelled synthetic preview. Native Rust persistence is tested separately. The latest native smoke evidence is recorded in [native-verification.json](native-verification.json); the installer SHA-256 is in [installer.sha256](installer.sha256).
 
-Screenshots: [dashboard](screenshots/dashboard.png), [scaled dashboard](screenshots/dashboard-scaled.png), [native dashboard](screenshots/native-dashboard.png), [native refunds](screenshots/native-refund-chart.png). Installer identity: [SHA-256](installer.sha256).
+Screenshots: [dashboard](screenshots/dashboard.png), [scaled dashboard](screenshots/dashboard-scaled.png), [native dashboard](screenshots/native-dashboard.png), [native refund chart](screenshots/native-refund-chart.png).
 
-See [acceptance gates](ACCEPTANCE.md) for distribution requirements. Signing is intentionally unset for this local app at the user's request. No signed update service is configured. Fresh Windows profile/PC, real disk-full/ACL, screen reader, offline installer and upgrade/rollback acceptance remain required.
+Email delivery remains unconfigured. Preview, offline, failed, and retry states do not claim that a message was sent. No email provider secret is bundled. The update service is also unconfigured.
+
+Signing is deliberately unset for this local app. The unsigned NSIS development installer includes the frontend and offline WebView2. Fresh-profile/PC installation and recovery, physical disk-full/ACL cases, OS screen-reader checks, and upgrade/rollback acceptance remain manual gates; isolated directories on this profile do not substitute for another PC. See [acceptance](ACCEPTANCE.md).

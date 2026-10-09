@@ -20,6 +20,7 @@ export function SetupPage() {
   const { refresh } = useApp();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
+  const [planning, setPlanning] = useState(false);
   const [path, setPath] = useState("fresh");
   const [restore, setRestore] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -131,7 +132,13 @@ export function SetupPage() {
               try {
                 await api({ op: "create_vault", request: r });
                 await refresh();
-                navigate(path === "import" ? "/settings/data" : "/dashboard");
+                navigate(
+                  path === "import"
+                    ? "/settings/data"
+                    : planning
+                      ? "/settings/planning"
+                      : "/dashboard",
+                );
               } catch (e) {
                 setError(errorOf(e));
               } finally {
@@ -249,6 +256,16 @@ export function SetupPage() {
                 error={error}
               />
             )}
+            {step === 2 ? (
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={planning}
+                  onChange={(e) => setPlanning(e.target.checked)}
+                />
+                Set up expected income and a spending plan next (optional)
+              </label>
+            ) : null}
             <InlineError error={error} />
             <div className="modal-actions">
               {step > 0 ? (

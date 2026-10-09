@@ -57,7 +57,23 @@ pub fn atomic_write(path: &Path, bytes: &[u8], replace: bool) -> Result<()> {
         f.sync_all()?;
         drop(f);
         if replace {
-            fs::rename(&temp, path)?;
+            // Windows scanners can briefly hold a just-written file. Retry only
+            // sharing/access failures; a permanent permission failure still fails safely.
+            let mut attempts = 0;
+            loop {
+                match fs::rename(&temp, path) {
+                    Ok(()) => break,
+                    Err(e)
+                        if cfg!(windows)
+                            && matches!(e.raw_os_error(), Some(5 | 32 | 33))
+                            && attempts < 5 =>
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(25u64 << attempts));
+                        attempts += 1;
+                    }
+                    Err(e) => return Err(e.into()),
+                }
+            }
         } else {
             fs::hard_link(&temp, path)?;
             fs::remove_file(&temp)?;
@@ -174,7 +190,7 @@ impl Vault {
             currency: r.currency,
             locale: r.locale,
             date_format: r.date_format,
-            theme: "light".into(),
+            theme: "dark".into(),
             inactivity_minutes: 15,
             last_backup: None,
         };

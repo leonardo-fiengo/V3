@@ -103,6 +103,8 @@ pub struct Filters {
     #[ts(optional)]
     pub kind: Option<String>,
     #[ts(optional)]
+    pub cleared: Option<bool>,
+    #[ts(optional)]
     pub sort: Option<String>,
     #[ts(optional)]
     pub page: Option<u32>,
@@ -131,6 +133,8 @@ pub struct Budget {
     pub budgeted: Option<String>,
     pub spent: String,
     pub remaining: Option<String>,
+    pub forecast: Option<String>,
+    pub forecast_explanation: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct Dashboard {

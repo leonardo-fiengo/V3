@@ -1,3 +1,4 @@
+import { minor, decimal, chartNumber } from "../lib/money";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, Copy, Pencil, Plus, Trash2 } from "lucide-react";
@@ -15,7 +16,7 @@ import {
 } from "../components/ui";
 import type { AppError, Budget } from "../lib/types";
 export default function BudgetsPage() {
-  const { refresh, notify } = useApp();
+  const { refresh, notify, hidden } = useApp();
   const [month, setMonth] = useState(currentMonth);
   const [editing, setEditing] = useState<Budget | null>(null);
   const [amount, setAmount] = useState("");
@@ -26,18 +27,18 @@ export default function BudgetsPage() {
   const navigate = useNavigate();
   const q = useQuery(() => api({ op: "get_monthly_budget", month }), [month]);
   const rows = q.data ?? [];
-  const budgeted = rows.reduce((s, b) => s + Number(b.budgeted ?? 0), 0);
+  const budgeted = rows.reduce((s, b) => s + minor(b.budgeted ?? "0"), 0n);
   const spent = rows
     .filter((b) => b.budgeted)
-    .reduce((s, b) => s + Number(b.spent), 0);
+    .reduce((s, b) => s + minor(b.spent), 0n);
   const unbudgeted = rows
     .filter((b) => !b.budgeted)
-    .reduce((s, b) => s + Number(b.spent), 0);
+    .reduce((s, b) => s + minor(b.spent), 0n);
   return (
     <>
       <PageTitle
         eyebrow="SMALL PLANS. MORE POSSIBILITY."
-        title="Give your month a plan."
+        title="Budgets"
         description="Simple category budgets to keep the things you care about in reach."
       >
         <MonthPicker value={month} onChange={setMonth} />
@@ -53,21 +54,21 @@ export default function BudgetsPage() {
             <div className="budget-summary-grid">
               <div className="panel summary-stat">
                 <p>Total budgeted</p>
-                <Amount value={budgeted.toFixed(2)} />
+                <Amount value={decimal(budgeted)} />
                 <small>
                   Across {rows.filter((b) => b.budgeted).length} categories
                 </small>
               </div>
               <div className="panel summary-stat">
                 <p>Spent in budgeted categories</p>
-                <Amount value={spent.toFixed(2)} />
+                <Amount value={decimal(spent)} />
                 <small>Expenses minus refunds</small>
               </div>
               <div className="panel summary-stat">
                 <p>Remaining to spend</p>
                 <Amount
                   className={budgeted - spent < 0 ? "warning-text" : "positive"}
-                  value={(budgeted - spent).toFixed(2)}
+                  value={decimal(budgeted - spent)}
                 />
                 <small>No rollover between months</small>
               </div>
@@ -89,6 +90,7 @@ export default function BudgetsPage() {
                       <th className="right">Budgeted</th>
                       <th className="right">Spent</th>
                       <th className="right">Remaining</th>
+                      <th className="right">Forecast</th>
                       <th>
                         <span className="sr-only">Actions</span>
                       </th>
@@ -97,7 +99,8 @@ export default function BudgetsPage() {
                   <tbody>
                     {rows.map((b) => {
                       const ratio = b.budgeted
-                        ? Number(b.spent) / Number(b.budgeted)
+                        ? chartNumber(minor(b.spent).toString()) /
+                          chartNumber(minor(b.budgeted).toString())
                         : 0;
                       return (
                         <tr key={b.category_id}>
@@ -112,7 +115,7 @@ export default function BudgetsPage() {
                             >
                               <i
                                 className="category-swatch"
-                                style={{ background: b.color }}
+                                style={{ background: "var(--accent)" }}
                               />
                               {b.name}
                               <ArrowUpRight size={13} />
@@ -122,17 +125,22 @@ export default function BudgetsPage() {
                             <div className="progress-track">
                               <span
                                 style={{
-                                  width: `${Math.min(Math.max(ratio, 0), 1) * 100}%`,
-                                  background: ratio > 1 ? "#d18b5d" : b.color,
+                                  width: `${(hidden ? 0 : Math.min(Math.max(ratio, 0), 1)) * 100}%`,
+                                  background:
+                                    ratio > 1
+                                      ? "var(--warning)"
+                                      : "var(--accent)",
                                 }}
                               />
                             </div>
                             <small
                               className={ratio > 1 ? "warning-text" : "muted"}
                             >
-                              {b.budgeted
-                                ? `${Math.round(ratio * 100)}% used`
-                                : "No allocation yet"}
+                              {hidden
+                                ? "Progress hidden"
+                                : b.budgeted
+                                  ? `${Math.round(ratio * 100)}% used`
+                                  : "No allocation yet"}
                             </small>
                           </td>
                           <td className="right">
@@ -146,7 +154,7 @@ export default function BudgetsPage() {
                             <Amount value={b.spent} />
                           </td>
                           <td
-                            className={`right ${Number(b.remaining) < 0 ? "warning-text" : "positive"}`}
+                            className={`right ${minor(b.remaining ?? "0") < 0n ? "warning-text" : "positive"}`}
                           >
                             {b.remaining ? (
                               <Amount value={b.remaining} />
@@ -155,6 +163,27 @@ export default function BudgetsPage() {
                                 Unbudgeted
                               </span>
                             )}
+                          </td>
+                          <td className="right">
+                            <span
+                              className={
+                                b.forecast &&
+                                b.budgeted &&
+                                minor(b.forecast) > minor(b.budgeted)
+                                  ? "warning-text"
+                                  : ""
+                              }
+                            >
+                              {b.forecast ? (
+                                <Amount value={b.forecast} />
+                              ) : (
+                                "Unavailable"
+                              )}
+                            </span>
+                            <details>
+                              <summary>Assumptions</summary>
+                              <p>{b.forecast_explanation}</p>
+                            </details>
                           </td>
                           <td className="right">
                             <button
@@ -189,11 +218,10 @@ export default function BudgetsPage() {
                 </table>
               </div>
             </section>
-            {unbudgeted !== 0 ? (
+            {unbudgeted !== 0n ? (
               <div className="info-note">
                 <strong>
-                  <Amount value={unbudgeted.toFixed(2)} /> in unbudgeted
-                  spending.
+                  <Amount value={decimal(unbudgeted)} /> in unbudgeted spending.
                 </strong>{" "}
                 Set allocations above to include those categories in your plan.
               </div>

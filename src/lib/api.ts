@@ -16,6 +16,18 @@ import type {
 } from "./types";
 export const desktop = typeof window !== "undefined" && isTauri();
 type Responses = {
+  get_cash_flow: import("./generated/CashFlowPoint").CashFlowPoint[];
+  get_overview: import("./generated/Overview").Overview;
+  get_occurrences: import("./generated/Occurrence").Occurrence[];
+  unlink_order: null;
+  export_tax_organizer:string;
+  get_workspace: import("./generated/Workspace").Workspace;
+  save_workspace_item: string;
+  record_occurrence: string;
+  settle_debt: string;
+  refund_purchase: string;
+  exclude_forecast: null;
+  attempt_reminder: string;
   get_session: Session;
   create_vault: Session;
   unlock_vault: Session;

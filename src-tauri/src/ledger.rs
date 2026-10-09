@@ -406,7 +406,7 @@ pub fn validate_transaction(c: &Connection, r: &NewTransaction) -> Result<Vec<(S
     }
     Ok(p)
 }
-fn insert(
+pub(crate) fn insert(
     c: &Connection,
     r: &NewTransaction,
     p: &[(String, i64)],
@@ -526,9 +526,12 @@ pub fn void(c: &Connection, entry: &str, k: &str) -> Result<String> {
             "Opening balances and correction records cannot be voided here.",
         ));
     }
+    if c.query_row("SELECT COUNT(*) FROM refund_links f WHERE original_id=?1 AND NOT EXISTS(SELECT 1 FROM journal_entries e WHERE e.reverses_id=f.entry_id)",[entry],|r|r.get::<_,i64>(0))?>0{return Err(AppError::new("LINKED_REFUNDS","Void the linked refunds before voiding or correcting this purchase."))}
     active(c, &tx.account_id, "account", &tx.date, "account_id")?;
     if let Some(to) = &tx.destination_id {
-        active(c, to, "account", &tx.date, "destination_id")?;
+        if !to.starts_with("debt:") {
+            active(c, to, "account", &tx.date, "destination_id")?;
+        }
     }
     let mut stmt = c.prepare("SELECT account_id,-amount FROM postings WHERE entry_id=?1")?;
     let p = stmt
@@ -558,9 +561,33 @@ pub fn correct(c: &Connection, entry: &str, r: &NewTransaction) -> Result<String
             "This transaction has already been corrected or voided.",
         ));
     }
+    if c.query_row("SELECT COUNT(*) FROM debt_settlements WHERE entry_id=?1 UNION ALL SELECT COUNT(*) FROM refund_links WHERE entry_id=?1",[entry],|x|x.get::<_,i64>(0))?>0 || c.query_row("SELECT COUNT(*) FROM refund_links WHERE entry_id=?1",[entry],|x|x.get::<_,i64>(0))?>0{return Err(AppError::new("LINKED_RECORD","Void this repayment or refund, then record its corrected amount using the linked workflow."))}
+    let linked_order:i64=c.query_row("SELECT COUNT(*) FROM workspace_items WHERE kind='order' AND json_extract(payload,'$.transaction_id')=?1",[entry],|x|x.get(0))?;
+    if linked_order > 0 && (r.amount != tx.amount || r.kind != tx.kind) {
+        return Err(AppError::new(
+            "LINKED_ORDER",
+            "Unlink this order before changing the purchase total or type.",
+        ));
+    }
+    let recurring: i64 = c.query_row(
+        "SELECT COUNT(*) FROM recurring_payments WHERE entry_id=?1",
+        [entry],
+        |x| x.get(0),
+    )?;
+    if recurring > 0
+        && (r.kind != "expense" || r.account_id != tx.account_id || r.category_id != tx.category_id)
+    {
+        return Err(AppError::new("LINKED_PAYMENT","A linked recurring payment must keep its expense type, account and category. Void it to remove the payment instead."));
+    }
     void(c, entry, &format!("{}:reversal", r.idempotency_key))?;
     let p = validate_transaction(c, r)?;
-    insert(c, r, &p, Some(entry), None, "correction")
+    let replacement = insert(c, r, &p, Some(entry), None, "correction")?;
+    c.execute(
+        "UPDATE recurring_payments SET entry_id=?1 WHERE entry_id=?2",
+        params![replacement, entry],
+    )?;
+    c.execute("UPDATE workspace_items SET payload=json_set(payload,'$.transaction_id',?1) WHERE kind='order' AND json_extract(payload,'$.transaction_id')=?2",params![replacement,entry])?;
+    Ok(replacement)
 }
 pub fn history(c: &Connection, entry: &str) -> Result<Vec<Transaction>> {
     let mut root = entry.to_string();
@@ -609,7 +636,7 @@ pub fn search(c: &Connection, f: &Filters) -> Result<SearchResult> {
             "The end date must follow the start date.",
         ));
     }
-    let mut stmt=c.prepare("SELECT e.id FROM journal_entries e JOIN entry_annotations a ON a.entry_id=e.id WHERE e.posted=1 AND e.kind NOT IN ('reversal','opening') AND NOT EXISTS(SELECT 1 FROM journal_entries r WHERE r.reverses_id=e.id) AND (?1 IS NULL OR instr(lower(a.description||' '||a.payee),lower(?1))>0) AND (?2 IS NULL OR e.date>=?2) AND (?3 IS NULL OR e.date<=?3) AND (?4 IS NULL OR e.account_id=?4 OR e.destination_id=?4) AND (?5 IS NULL OR EXISTS(SELECT 1 FROM postings p WHERE p.entry_id=e.id AND p.account_id=?5)) AND (?6 IS NULL OR e.kind=?6 OR (?6='expense' AND e.kind IN ('split','refund'))) ORDER BY e.date DESC,e.rowid DESC")?;
+    let mut stmt=c.prepare("SELECT e.id FROM journal_entries e JOIN entry_annotations a ON a.entry_id=e.id WHERE e.posted=1 AND e.kind NOT IN ('reversal','opening') AND NOT EXISTS(SELECT 1 FROM journal_entries r WHERE r.reverses_id=e.id) AND (?1 IS NULL OR instr(lower(a.description||' '||a.payee),lower(?1))>0) AND (?2 IS NULL OR e.date>=?2) AND (?3 IS NULL OR e.date<=?3) AND (?4 IS NULL OR e.account_id=?4 OR e.destination_id=?4) AND (?5 IS NULL OR EXISTS(SELECT 1 FROM postings p WHERE p.entry_id=e.id AND p.account_id=?5)) AND (?6 IS NULL OR e.kind=?6 OR (?6='expense' AND e.kind IN ('split','refund'))) AND (?7 IS NULL OR a.cleared=?7) ORDER BY e.date DESC,e.rowid DESC")?;
     let ids = stmt
         .query_map(
             params![
@@ -618,7 +645,8 @@ pub fn search(c: &Connection, f: &Filters) -> Result<SearchResult> {
                 f.end,
                 f.account_id,
                 f.category_id,
-                f.kind
+                f.kind,
+                f.cleared
             ],
             |r| r.get::<_, String>(0),
         )?

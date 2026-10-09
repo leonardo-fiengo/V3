@@ -1,3 +1,4 @@
+import { formatMinor, minor } from "../lib/money";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import {
   ArrowDownLeft,
@@ -25,15 +26,23 @@ export function Amount({
   sign?: boolean;
   className?: string;
 }) {
-  const { session } = useApp();
-  const n = Number(value);
+  const { session, hidden } = useApp();
+  let formatted = "—";
+  try {
+    formatted = formatMinor(
+      minor(value),
+      session?.config?.locale ?? "en-GB",
+      currency ?? session?.config?.currency ?? "EUR",
+      sign,
+    );
+  } catch {}
   return (
     <span className={`amount ${className}`}>
-      {new Intl.NumberFormat(session?.config?.locale ?? "en-GB", {
-        style: "currency",
-        currency: currency ?? session?.config?.currency ?? "EUR",
-        signDisplay: sign ? "exceptZero" : "auto",
-      }).format(n)}
+      {hidden ? (
+        <span aria-label="Balance hidden">{"\u2022\u2022\u2022\u2022"}</span>
+      ) : (
+        formatted
+      )}
     </span>
   );
 }
@@ -203,6 +212,7 @@ export function Modal({
   onClose,
   dirty = false,
   wide = false,
+  drawer = false,
 }: {
   title: string;
   description?: string;
@@ -210,6 +220,7 @@ export function Modal({
   onClose: () => void;
   dirty?: boolean;
   wide?: boolean;
+  drawer?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [discard, setDiscard] = useState(false);
@@ -261,7 +272,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={`modal ${wide ? "wide" : ""}`}
+      className={`modal ${wide ? "wide" : ""} ${drawer ? "drawer" : ""}`}
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();

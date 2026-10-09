@@ -1,3 +1,5 @@
+import { Drawer } from "../components/ui/index";
+import { RefundDialog } from "../features/workspace/FinancialDialogs";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -37,11 +39,12 @@ export function TransactionDetail({
   const q = useQuery(() => api({ op: "get_transaction", id }), [id]);
   const h = useQuery(() => api({ op: "get_history", id }), [id]);
   const [confirm, setConfirm] = useState(false);
+  const [refund, setRefund] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [busy, setBusy] = useState(false);
   const t = q.data;
   return (
-    <Modal title="Transaction details" onClose={onClose} wide>
+    <Drawer title="Transaction details" onClose={onClose} wide>
       <State loading={q.loading && !t} error={q.error}>
         {t ? (
           <>
@@ -60,6 +63,9 @@ export function TransactionDetail({
                 {t.status === "voided" ? "Corrected or voided" : "Posted"}
               </span>
             </div>
+            <p className="fine-print">
+              Transaction ID: <code>{t.id}</code>
+            </p>
             <dl className="detail-grid">
               <div>
                 <dt>Date</dt>
@@ -176,6 +182,15 @@ export function TransactionDetail({
             </section>
             <InlineError error={error} />
             <div className="detail-actions">
+              {["expense", "split"].includes(t.kind) &&
+              t.status === "posted" ? (
+                <button
+                  className="button secondary"
+                  onClick={() => setRefund(true)}
+                >
+                  Refund
+                </button>
+              ) : null}
               <button
                 className="button secondary"
                 disabled={t.status !== "posted"}
@@ -205,6 +220,9 @@ export function TransactionDetail({
           </>
         ) : null}
       </State>
+      {refund && t ? (
+        <RefundDialog transaction={t} onClose={() => setRefund(false)} />
+      ) : null}
       {confirm ? (
         <Confirm
           title="Void this transaction?"
@@ -222,7 +240,7 @@ export function TransactionDetail({
           }}
         />
       ) : null}
-    </Modal>
+    </Drawer>
   );
 }
 export default function TransactionsPage() {
@@ -240,6 +258,12 @@ export default function TransactionsPage() {
     account_id: params.get("account_id") || undefined,
     category_id: params.get("category_id") || undefined,
     kind: params.get("kind") || undefined,
+    cleared:
+      params.get("status") === "cleared"
+        ? true
+        : params.get("status") === "uncleared"
+          ? false
+          : undefined,
     sort: params.get("sort") || "newest",
     page: Number(params.get("page") || 1),
     page_size: 25,
@@ -264,6 +288,7 @@ export default function TransactionsPage() {
     "account_id",
     "category_id",
     "kind",
+    "status",
   ].filter((k) => params.has(k)).length;
   return (
     <>
@@ -409,6 +434,17 @@ export default function TransactionsPage() {
                 <option value="income">Income</option>
                 <option value="transfer">Transfers</option>
                 <option value="refund">Refunds</option>
+              </select>
+            </label>
+            <label>
+              Status
+              <select
+                value={params.get("status") ?? ""}
+                onChange={(e) => change("status", e.target.value)}
+              >
+                <option value="">All posted</option>
+                <option value="cleared">Cleared</option>
+                <option value="uncleared">Uncleared</option>
               </select>
             </label>
             <button

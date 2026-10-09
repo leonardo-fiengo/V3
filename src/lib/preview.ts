@@ -1,3 +1,4 @@
+import { workspaceOps, workspacePreview } from "./preview-workspace";
 // Explicit, volatile browser demonstration. No production financial storage or password emulation.
 import type {
   Account,
@@ -17,7 +18,7 @@ const config: Config = {
   currency: "EUR",
   locale: "en-GB",
   date_format: "DMY",
-  theme: "light",
+  theme: "dark",
   inactivity_minutes: 15,
   last_backup: null,
 };
@@ -261,6 +262,7 @@ function search(f: Filters) {
         (!f.category_id ||
           t.category_id === f.category_id ||
           t.splits.some((s) => s.category_id === f.category_id)) &&
+        (f.cleared===undefined||t.cleared===f.cleared)&&
         (!f.kind ||
           t.kind === f.kind ||
           (f.kind === "expense" && ["split", "refund"].includes(t.kind))),
@@ -353,6 +355,9 @@ function budgets(month: string): Budget[] {
         spent,
         budgeted,
         remaining: budgeted ? dec(minor(budgeted) - minor(spent)) : null,
+        forecast: null,
+        forecast_explanation:
+          "Synthetic preview: see the dashboard for a sample forecast.",
       };
     });
 }
@@ -377,6 +382,34 @@ export async function previewCommand(c: Command): Promise<unknown> {
       message: "Open the preview to continue.",
       field: null,
     };
+  if (workspaceOps.has(c.op))
+    return workspacePreview(c, {
+      dashboard: () => {
+        const range = monthRange(currentMonth());
+        const r = report(range.start, today());
+        const q = r.months[0];
+        return {
+          month: currentMonth(),
+          net_worth: dec(balances().reduce((s, a) => s + minor(a.balance), 0)),
+          income: q.income,
+          expenses: q.expenses,
+          surplus: q.surplus,
+          accounts: balances(),
+          spending: r.spending,
+          budgets: budgets(currentMonth()),
+          recent: search({ page_size: 6 }).rows,
+        };
+      },
+      query: (start, end, account) =>
+        search({ start, end, account_id: account ?? undefined }),
+      netWorth: (through) =>
+        dec(balances(through).reduce((s, a) => s + minor(a.balance), 0)),
+      add,
+      get: (id) => entries.find((t) => t.id === id),
+      adjust: (id, n) => {
+        openings[id] += Number(n);
+      },
+    });
   switch (c.op) {
     case "list_accounts":
       return balances();

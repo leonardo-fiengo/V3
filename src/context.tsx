@@ -34,10 +34,19 @@ type AppContextValue = {
   intent: FormIntent | null;
   closeForm: () => void;
   fatal: AppError | null;
+  hidden: boolean;
+  setHidden: (v: boolean) => void;
 };
 const AppContext = createContext<AppContextValue>(null!);
 export const useApp = () => useContext(AppContext);
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [hidden, updateHidden] = useState(
+    () => localStorage.getItem("mm.privacy.v1") === "hidden",
+  );
+  const setHidden = (v: boolean) => {
+    updateHidden(v);
+    localStorage.setItem("mm.privacy.v1", v ? "hidden" : "visible");
+  };
   const [session, setSession] = useState<Session | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -45,15 +54,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState("");
   const [intent, setIntent] = useState<FormIntent | null>(null);
   const [fatal, setFatal] = useState<AppError | null>(null);
+  const generation = useRef(0);
   const refresh = useCallback(async () => {
+    const requestGeneration = ++generation.current;
     try {
       const s = await api({ op: "get_session" });
+      if (requestGeneration !== generation.current) return;
       setSession(s);
       if (s.status === "unlocked") {
         const [a, c] = await Promise.all([
           api({ op: "list_accounts" }),
           api({ op: "list_categories" }),
         ]);
+        if (requestGeneration !== generation.current) return;
         setAccounts(a);
         setCategories(c);
       } else {
@@ -64,7 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setRevision((n) => n + 1);
       setFatal(null);
     } catch (e) {
-      setFatal(errorOf(e));
+      if (requestGeneration === generation.current) setFatal(errorOf(e));
     }
   }, []);
   useEffect(() => {
@@ -76,7 +89,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [toast]);
   useEffect(() => {
-    const theme = session?.config?.theme ?? "light";
+    const theme = session?.config?.theme ?? "dark";
     document.documentElement.dataset.theme =
       theme === "system"
         ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -94,7 +107,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         lastHeartbeat = Date.now();
         void api({ op: "get_session" })
           .then((next) => {
-            if (next.status !== "unlocked") setSession(next);
+            if (next.status !== "unlocked") {
+              setSession(next);
+              setAccounts([]);
+              setCategories([]);
+              setIntent(null);
+              setRevision((n) => n + 1);
+            }
           })
           .catch((error) => setFatal(errorOf(error)));
       }
@@ -124,6 +143,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         intent,
         closeForm: () => setIntent(null),
         fatal,
+        hidden,
+        setHidden,
       }}
     >
       {children}
@@ -150,6 +171,7 @@ export function useQuery<T>(load: () => Promise<T>, deps: DependencyList = []) {
   fn.current = load;
   useEffect(() => {
     let active = true;
+    setData(undefined);
     setLoading(true);
     setError(null);
     fn.current()

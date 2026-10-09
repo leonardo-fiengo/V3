@@ -4,9 +4,12 @@ Automated assertions cover the architecture; manual Windows acceptance is separa
 
 | Scenario | Evidence or remaining work |
 |---|---|
-| Create ? expense ? restart ? unlock | Rust persistence plus real embedded native UI/restart smoke; clean-profile usability remains manual |
+| Create account / expense / restart / unlock | Rust persistence plus real embedded native UI/restart smoke; clean-profile usability remains manual |
 | Income, transfers, card payment | Rust ledger workflow tests |
-| Splits/refunds/monthly budgets | Rust filtered-total agreement tests |
+| Splits/refunds/monthly budgets | Rust filtered-total agreement, category forecasts and remaining refund allocation tests |
+| Recurring, plans, debts, orders, taxes | Rust regressions and native persistence/CSV smoke passed |
+| Privacy and shortcuts | Browser and native masking checks; typing/IME safeguards and keyboard date inspection |
+| Email reminders | Preview, offline and retry history implemented; protected delivery service unconfigured |
 | Corrections and void history | Atomic correction tests and browser detail flow |
 | Repeated save | Idempotency/conflict assertions and synchronous frontend guard |
 | Archived accounts | Reject new postings; retain balances/history |

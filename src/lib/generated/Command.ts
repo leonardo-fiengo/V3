@@ -5,56 +5,6 @@ import type { ImportMapping } from "./ImportMapping";
 import type { NewAccount } from "./NewAccount";
 import type { NewTransaction } from "./NewTransaction";
 import type { Setup } from "./Setup";
+import type { WorkspaceItem } from "./WorkspaceItem";
 
-export type Command =
-  | { op: "get_session" }
-  | { op: "create_vault"; request: Setup }
-  | { op: "unlock_vault"; password: string }
-  | { op: "lock_vault" }
-  | { op: "list_accounts" }
-  | { op: "create_account"; request: NewAccount }
-  | { op: "rename_account"; id: string; name: string }
-  | { op: "archive_account"; id: string; archived: boolean }
-  | { op: "list_categories" }
-  | { op: "create_category"; name: string; kind: string; color: string }
-  | { op: "rename_category"; id: string; name: string }
-  | { op: "archive_category"; id: string; archived: boolean }
-  | { op: "create_expense"; request: NewTransaction }
-  | { op: "create_income"; request: NewTransaction }
-  | { op: "create_transfer"; request: NewTransaction }
-  | { op: "create_split_expense"; request: NewTransaction }
-  | { op: "create_refund"; request: NewTransaction }
-  | { op: "correct_transaction"; id: string; request: NewTransaction }
-  | { op: "void_transaction"; id: string; idempotency_key: string }
-  | { op: "set_cleared"; id: string; cleared: boolean }
-  | { op: "search_transactions"; filters: Filters }
-  | { op: "get_transaction"; id: string }
-  | { op: "get_history"; id: string }
-  | { op: "get_dashboard"; month: string }
-  | {
-      op: "set_budget";
-      month: string;
-      category_id: string;
-      amount: string | null;
-    }
-  | { op: "get_monthly_budget"; month: string }
-  | { op: "copy_budgets"; month: string }
-  | { op: "get_reports"; start: string; end: string; account_id: string | null }
-  | { op: "export_transactions"; path: string; filters: Filters }
-  | {
-      op: "export_report";
-      path: string;
-      start: string;
-      end: string;
-      account_id: string | null;
-      kind: string;
-    }
-  | { op: "preview_import"; path: string; mapping: ImportMapping | null }
-  | { op: "commit_import"; token: string; approved_rows: Array<number> }
-  | { op: "create_backup"; path: string }
-  | { op: "preview_restore"; path: string; password: string }
-  | { op: "commit_restore"; token: string }
-  | { op: "save_config"; config: Config }
-  | { op: "change_password"; current_password: string; new_password: string }
-  | { op: "preview_v2"; path: string }
-  | { op: "commit_v2"; token: string };
+export type Command = { "op": "get_session" } | { "op": "get_overview", start: string, end: string, } | { "op": "get_workspace" } | { "op": "export_tax_organizer", path: string, } | { "op": "unlink_order", id: string, } | { "op": "get_cash_flow", start: string, end: string, account_id: string | null, } | { "op": "get_occurrences", start: string, end: string, } | { "op": "save_workspace_item", item: WorkspaceItem, idempotency_key: string, } | { "op": "record_occurrence", id: string, occurrence: string, existing: string | null, date: string, idempotency_key: string, } | { "op": "settle_debt", id: string, account_id: string, amount: string, date: string, idempotency_key: string, } | { "op": "refund_purchase", id: string, product: string, delivery: string, date: string, idempotency_key: string, } | { "op": "exclude_forecast", id: string, excluded: boolean, } | { "op": "attempt_reminder", id: string, message: string, idempotency_key: string, } | { "op": "create_vault", request: Setup, } | { "op": "unlock_vault", password: string, } | { "op": "lock_vault" } | { "op": "list_accounts" } | { "op": "create_account", request: NewAccount, } | { "op": "rename_account", id: string, name: string, } | { "op": "archive_account", id: string, archived: boolean, } | { "op": "list_categories" } | { "op": "create_category", name: string, kind: string, color: string, } | { "op": "rename_category", id: string, name: string, } | { "op": "archive_category", id: string, archived: boolean, } | { "op": "create_expense", request: NewTransaction, } | { "op": "create_income", request: NewTransaction, } | { "op": "create_transfer", request: NewTransaction, } | { "op": "create_split_expense", request: NewTransaction, } | { "op": "create_refund", request: NewTransaction, } | { "op": "correct_transaction", id: string, request: NewTransaction, } | { "op": "void_transaction", id: string, idempotency_key: string, } | { "op": "set_cleared", id: string, cleared: boolean, } | { "op": "search_transactions", filters: Filters, } | { "op": "get_transaction", id: string, } | { "op": "get_history", id: string, } | { "op": "get_dashboard", month: string, } | { "op": "set_budget", month: string, category_id: string, amount: string | null, } | { "op": "get_monthly_budget", month: string, } | { "op": "copy_budgets", month: string, } | { "op": "get_reports", start: string, end: string, account_id: string | null, } | { "op": "export_transactions", path: string, filters: Filters, } | { "op": "export_report", path: string, start: string, end: string, account_id: string | null, kind: string, } | { "op": "preview_import", path: string, mapping: ImportMapping | null, } | { "op": "commit_import", token: string, approved_rows: Array<number>, } | { "op": "create_backup", path: string, } | { "op": "preview_restore", path: string, password: string, } | { "op": "commit_restore", token: string, } | { "op": "save_config", config: Config, } | { "op": "change_password", current_password: string, new_password: string, } | { "op": "preview_v2", path: string, } | { "op": "commit_v2", token: string, };

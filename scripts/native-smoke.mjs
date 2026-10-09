@@ -90,6 +90,12 @@ async function stop() {
   active = undefined;
   await pause(700);
 }
+async function addExpense(page) {
+  await page
+    .getByRole("button", { name: "Add transaction", exact: true })
+    .click();
+  await page.getByRole("button", { name: /^Expense/ }).click();
+}
 async function invoke(page, request) {
   return page.evaluate(
     (request) => window.__TAURI_INTERNALS__.invoke("execute", { request }),
@@ -117,10 +123,10 @@ try {
   await page
     .getByRole("button", { name: "Create my vault", exact: true })
     .click();
-  await expect(
-    page.getByRole("heading", { name: "Your money, at a glance." }),
-  ).toBeVisible({ timeout: 120000 });
-  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await expect(page.locator(".net-worth-hero")).toBeVisible({
+    timeout: 120000,
+  });
+  await addExpense(page);
   const form = page.getByRole("dialog");
   await form
     .getByRole("textbox", { name: "Amount", exact: true })
@@ -135,9 +141,7 @@ try {
     .getByRole("button", { name: "Save transaction", exact: true })
     .click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /Smoke bank/ })).toContainText(
-    "987.65",
-  );
+  await expect(page.locator(".hero-amount")).toContainText("987.65");
   results.push(
     "Native UI setup and expense through Rust IPC update account balance",
   );
@@ -146,7 +150,7 @@ try {
     path: "docs/screenshots/native-dashboard.png",
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Add expense", exact: true }).click();
+  await addExpense(page);
   await page
     .getByRole("dialog")
     .getByRole("textbox", { name: "Description (optional)", exact: true })
@@ -172,9 +176,15 @@ try {
     "Native window close preserves unsaved drafts until explicit discard",
   );
   console.log(results.at(-1));
-  await expect(
-    page.locator(".cashflow-chart .chart-grid span").first(),
-  ).toHaveText("12.35");
+  expect(
+    (
+      await invoke(page, {
+        op: "get_overview",
+        start: new Date().toISOString().slice(0, 4) + "-01-01",
+        end: await page.getByLabel("Cash flow end date").inputValue(),
+      })
+    ).points.at(-1).spending.minor_units,
+  ).toBe("1235");
   const originalData = active.data;
   await stop();
   page = await launch("original");
@@ -183,10 +193,9 @@ try {
   ).toBeVisible({ timeout: 120000 });
   await page.getByLabel("Vault password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Unlock vault", exact: true }).click();
-  await expect(page.getByRole("link", { name: /Smoke bank/ })).toContainText(
-    "987.65",
-    { timeout: 120000 },
-  );
+  await expect(page.locator(".hero-amount")).toContainText("987.65", {
+    timeout: 120000,
+  });
   const accounts = await invoke(page, { op: "list_accounts" });
   expect(
     accounts.find((account) => account.name === "Smoke bank").balance,
@@ -214,10 +223,9 @@ try {
   expect(preview.account_count).toBe(1);
   await invoke(page, { op: "commit_restore", token: preview.token });
   await page.reload();
-  await expect(page.getByRole("link", { name: /Smoke bank/ })).toContainText(
-    "987.65",
-    { timeout: 120000 },
-  );
+  await expect(page.locator(".hero-amount")).toContainText("987.65", {
+    timeout: 120000,
+  });
   expect((await invoke(page, { op: "list_accounts" }))[0].balance).toBe(
     "987.65",
   );
@@ -253,9 +261,7 @@ try {
     },
   });
   await page.reload();
-  await expect(
-    page.locator(".cashflow-chart .chart-grid span").last(),
-  ).toHaveText("-7.65");
+  await expect(page.locator(".cumulative-chart svg")).toContainText("-");
   const month = localDate.slice(0, 7);
   expect((await invoke(page, { op: "get_dashboard", month })).expenses).toBe(
     "-7.65",
@@ -266,6 +272,167 @@ try {
   });
   results.push(
     "Small amounts retain precision and net refunds plot below zero",
+  );
+  console.log(results.at(-1));
+  const accountId = restoredAccounts[0].id;
+  const categoryId = categories.find((c) => c.name === "Groceries").id;
+  const debtId = await invoke(page, {
+    op: "save_workspace_item",
+    item: {
+      kind: "debt",
+      value: {
+        id: "",
+        person: "Native debtor",
+        direction: "to_me",
+        amount: "65.00",
+        date: localDate,
+        due_date: null,
+        email: "debtor@example.invalid",
+        notes: "Synthetic native test",
+      },
+    },
+    idempotency_key: randomUUID(),
+  });
+  const range = { start: month + "-01", end: localDate };
+  const beforeSettlement = (
+    await invoke(page, { op: "get_overview", ...range })
+  ).dashboard.net_worth;
+  await invoke(page, {
+    op: "settle_debt",
+    id: debtId,
+    account_id: accountId,
+    amount: "20.00",
+    date: localDate,
+    idempotency_key: randomUUID(),
+  });
+  expect(
+    (await invoke(page, { op: "get_overview", ...range })).dashboard.net_worth,
+  ).toBe(beforeSettlement);
+  const recurringId = await invoke(page, {
+    op: "save_workspace_item",
+    item: {
+      kind: "recurring",
+      value: {
+        id: "",
+        name: "Native bill",
+        amount: "10.00",
+        account_id: accountId,
+        category_id: categoryId,
+        first_date: localDate,
+        frequency: "monthly",
+        status: "active",
+        pause_start: null,
+        pause_end: null,
+        cancel_date: null,
+      },
+    },
+    idempotency_key: randomUUID(),
+  });
+  const occurrenceRequest = {
+    op: "record_occurrence",
+    id: recurringId,
+    occurrence: localDate,
+    existing: null,
+    date: localDate,
+    idempotency_key: randomUUID(),
+  };
+  const paymentId = await invoke(page, occurrenceRequest);
+  expect(await invoke(page, occurrenceRequest)).toBe(paymentId);
+  const purchase = (
+    await invoke(page, {
+      op: "search_transactions",
+      filters: { search: "Native smoke expense" },
+    })
+  ).rows[0];
+  await invoke(page, {
+    op: "save_workspace_item",
+    item: {
+      kind: "order",
+      value: {
+        id: "",
+        merchant: "Native shop",
+        transaction_id: purchase.id,
+        product: "10.00",
+        delivery: "2.35",
+        status: "delivered",
+        expected_refund: "2.00",
+      },
+    },
+    idempotency_key: randomUUID(),
+  });
+  await invoke(page, {
+    op: "refund_purchase",
+    id: purchase.id,
+    product: "1.00",
+    delivery: "1.00",
+    date: localDate,
+    idempotency_key: randomUUID(),
+  });
+  await invoke(page, {
+    op: "save_workspace_item",
+    item: {
+      kind: "plan",
+      value: {
+        method: "fixed",
+        income: "1450.00",
+        limit: "1100.00",
+        percent: 75,
+        frequency: "monthly",
+        payment_dates: [25],
+      },
+    },
+    idempotency_key: randomUUID(),
+  });
+  expect(
+    (await invoke(page, { op: "get_overview", ...range })).plan.forecast,
+  ).toBe(null);
+  await invoke(page, {
+    op: "save_workspace_item",
+    item: {
+      kind: "tax",
+      value: {
+        id: "",
+        title: "Native tax document",
+        transaction_id: purchase.id,
+        due_date: null,
+        document: "receipt.pdf",
+        category: "Expenses",
+        reviewed: false,
+        notes: "Synthetic",
+      },
+    },
+    idempotency_key: randomUUID(),
+  });
+  const organizer = path.join(root, "tax-organizer.csv");
+  await invoke(page, { op: "export_tax_organizer", path: organizer });
+  expect(
+    (await readFile(organizer, "utf8")).includes("Native tax document"),
+  ).toBe(true);
+  const savedWorkspace = await invoke(page, { op: "get_workspace" });
+  expect(savedWorkspace.debts[0].outstanding).toBe("45.00");
+  expect(savedWorkspace.orders[0].refunded_product).toBe("1.00");
+  expect(savedWorkspace.orders[0].expected_pending).toBe("0.00");
+  expect(savedWorkspace.payments).toHaveLength(1);
+  await stop();
+  page = await launch("restored");
+  await page.getByLabel("Vault password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Unlock vault", exact: true }).click();
+  await expect(page.locator(".net-worth-hero")).toBeVisible({
+    timeout: 120000,
+  });
+  const reopenedWorkspace = await invoke(page, { op: "get_workspace" });
+  expect(reopenedWorkspace.debts[0].outstanding).toBe("45.00");
+  expect(reopenedWorkspace.orders[0].refunded_delivery).toBe("1.00");
+  expect(reopenedWorkspace.payments).toHaveLength(1);
+  expect(reopenedWorkspace.taxes).toHaveLength(1);
+  await page
+    .getByRole("button", { name: "Hide balances", exact: true })
+    .click();
+  await expect(page.locator(".hero-amount")).not.toContainText("\u20ac");
+  await expect(page.locator(".hero-sparkline")).toHaveCount(0);
+  await expect(page.locator(".cumulative-chart")).toHaveCount(0);
+  results.push(
+    "Native planning, one-time recurring posting, order refund allocations, partial debt settlement and tax export persist across restart; privacy removes financial charts",
   );
   console.log(results.at(-1));
   await writeFile(

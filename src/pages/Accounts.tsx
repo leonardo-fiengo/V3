@@ -1,3 +1,4 @@
+import { minor, decimal } from "../lib/money";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
@@ -48,7 +49,7 @@ export default function AccountsPage() {
         : Promise.resolve(null),
     [id],
   );
-  const total = accounts.reduce((s, a) => s + Number(a.balance), 0);
+  const total = accounts.reduce((s, a) => s + minor(a.balance), 0n);
   return (
     <>
       {id ? (
@@ -194,7 +195,7 @@ export default function AccountsPage() {
               <div>
                 <p className="muted">Total across all accounts</p>
                 <h2>
-                  <Amount value={total.toFixed(2)} />
+                  <Amount value={decimal(total)} />
                 </h2>
               </div>
             </div>

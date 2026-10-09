@@ -5,6 +5,7 @@ use std::ptr::NonNull;
 pub fn fresh() -> Result<Connection> {
     let c = Connection::open_in_memory()?;
     c.execute_batch(include_str!("../migrations/001_initial.sql"))?;
+    migrate(&c)?;
     Ok(c)
 }
 pub fn image(c: &Connection) -> Result<Vec<u8>> {
@@ -31,12 +32,13 @@ pub fn from_image(bytes: &[u8]) -> Result<Connection> {
     let data = unsafe { OwnedData::from_raw_nonnull(ptr, bytes.len()) };
     c.deserialize(DatabaseName::Main, data, false)?;
     c.execute_batch("PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF;")?;
+    migrate(&c)?;
     validate(&c)?;
     Ok(c)
 }
 pub fn validate(c: &Connection) -> Result<()> {
     let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if v != 1 {
+    if v != 2 {
         return Err(AppError::new(
             "SCHEMA_VERSION",
             "This vault needs a different application version. Your saved file has been preserved.",
@@ -50,6 +52,20 @@ pub fn validate(c: &Connection) -> Result<()> {
             "INTEGRITY",
             "The vault failed its integrity checks. Your saved file has been preserved.",
         ));
+    }
+    Ok(())
+}
+
+fn migrate(c: &Connection) -> Result<()> {
+    let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if v == 1 {
+        c.execute_batch("BEGIN IMMEDIATE;")?;
+        let r = c.execute_batch(include_str!("../migrations/002_workspace.sql"));
+        if let Err(e) = r {
+            let _ = c.execute_batch("ROLLBACK");
+            return Err(e.into());
+        }
+        c.execute_batch("COMMIT;")?;
     }
     Ok(())
 }
